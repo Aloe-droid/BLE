@@ -3,6 +3,11 @@ package com.example.simpleble;
 import android.app.AlertDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothGatt;
+import android.bluetooth.BluetoothGattCallback;
+import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattService;
+import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.BluetoothLeScanner;
 import android.bluetooth.le.ScanCallback;
 import android.bluetooth.le.ScanResult;
@@ -12,6 +17,7 @@ import android.os.Handler;
 import android.os.ParcelUuid;
 import android.util.Log;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -24,7 +30,9 @@ public class BluetoothConnect {
     private Boolean isEnable = false;
     private final ScanCallback scanCallback;
     private final Set<BluetoothDevice> bluetoothDevices;
-
+    private BluetoothGatt bluetoothGatt;
+    private BluetoothGattCharacteristic gattCharacteristic;
+    private final String UUID_SERVICE = "0000ffe0-0000-1000-8000-00805f9b34fb";
 
     public BluetoothConnect(Context context) {
         this.context = context;
@@ -41,7 +49,7 @@ public class BluetoothConnect {
                 if (mServiceUuids != null) {
                     for (ParcelUuid uuid : mServiceUuids) {
                         //그중 HM10의 디폴트 UUID 가 보이면 주소를 저장한다.
-                        if (uuid.getUuid().toString().equals("0000ffe0-0000-1000-8000-00805f9b34fb")) {
+                        if (uuid.getUuid().toString().equals(UUID_SERVICE)) {
                             bluetoothDevices.add(result.getDevice());
                             Log.d("scanResult", result.getDevice().getAddress());
                         }
@@ -74,8 +82,8 @@ public class BluetoothConnect {
     public void scanDevice(final boolean enable) throws SecurityException {
         leScanner = bluetoothAdapter.getBluetoothLeScanner();
         if (enable) {
-            //10초간 스캔
-            long SCAN_PERIOD = 10000;
+            //3초간 스캔
+            long SCAN_PERIOD = 3000;
             new Handler().postDelayed(() -> {
                 leScanner.stopScan(scanCallback);
                 alertDialogBluetooth();
@@ -116,8 +124,64 @@ public class BluetoothConnect {
         for (BluetoothDevice device : bluetoothDevices) {
             if (device.getName().equals(selectedDeviceName)) {
                 //연결을 시도
-                Log.d("연결", "시도");
+                bluetoothGatt = device.connectGatt(context, false, bluetoothGattCallback);
             }
         }
+    }
+
+    private final BluetoothGattCallback bluetoothGattCallback = new BluetoothGattCallback() {
+        @Override
+        public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) throws SecurityException {
+            super.onConnectionStateChange(gatt, status, newState);
+            if (newState == BluetoothProfile.STATE_CONNECTED) {
+                // 새로운 상태가 연결되었을 때, 서비스 검색
+                gatt.discoverServices();
+            }
+        }
+
+        @Override
+        public void onServicesDiscovered(BluetoothGatt gatt, int status) throws SecurityException {
+            super.onServicesDiscovered(gatt, status);
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+                // BluetoothGatt 의 서비스를 검색 후 호출되는 콜백 메소드
+                BluetoothGattService service = gatt.getService(java.util.UUID.fromString(UUID_SERVICE));
+                String UUID_CHARACTERISTIC = "0000ffe1-0000-1000-8000-00805f9b34fb";
+                gattCharacteristic = service.getCharacteristic(java.util.UUID.fromString(UUID_CHARACTERISTIC));
+                // 해당 특성의 알람을 설정
+                gatt.setCharacteristicNotification(gattCharacteristic, true);
+            }
+        }
+
+        @Override
+        public void onCharacteristicChanged(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic) throws SecurityException {
+            super.onCharacteristicChanged(gatt, characteristic);
+            // 캐릭터리스틱이 변경될 때 호출되는 콜백 메소드
+            byte[] bytes = characteristic.getValue();
+            String data = new String(bytes, StandardCharsets.UTF_8);
+            Log.d("data", data);
+        }
+
+        @Override
+        public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
+            super.onCharacteristicRead(gatt, characteristic, status);
+            // 캐릭터리스틱이 변경될 때 호출되는 콜백 메소드
+            byte[] bytes = characteristic.getValue();
+            String data = new String(bytes, StandardCharsets.UTF_8);
+            Log.d("data", data);
+        }
+    };
+
+    public void sendBLE(String data) throws SecurityException {
+        if (gattCharacteristic != null) {
+            //해당 특성에 보낼 값을 저장한다.
+            gattCharacteristic.setValue(data.getBytes(StandardCharsets.UTF_8));
+            //특성에 전송한다.
+            bluetoothGatt.writeCharacteristic(gattCharacteristic);
+        }
+    }
+
+
+    public void closeBLE() throws SecurityException {
+        bluetoothGatt.close();
     }
 }

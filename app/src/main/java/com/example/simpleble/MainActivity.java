@@ -5,9 +5,11 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.util.Log;
+import android.widget.Button;
 import android.widget.Toast;
 
 public class MainActivity extends AppCompatActivity {
+    private BluetoothConnect bluetoothConnect;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -21,6 +23,13 @@ public class MainActivity extends AppCompatActivity {
         //블루투스 켜기 && BLE 찾기
         setBluetooth();
 
+        Button button = findViewById(R.id.button);
+        //버튼을 누르면 BLE 로 전송
+        button.setOnClickListener(v -> {
+            if (bluetoothConnect != null) {
+                bluetoothConnect.sendBLE("Hello.");
+            }
+        });
     }
 
     public void permissionCheck() {
@@ -36,8 +45,14 @@ public class MainActivity extends AppCompatActivity {
     }
 
     public void setBluetooth() {
-        BluetoothConnect bluetoothConnect = new BluetoothConnect(this);
+        bluetoothConnect = new BluetoothConnect(this);
         bluetoothConnect.bluetoothOn();
         bluetoothConnect.scanDevice(bluetoothConnect.getIsEnable());
+    }
+
+    @Override
+    protected void onDestroy() {
+        bluetoothConnect.closeBLE();
+        super.onDestroy();
     }
 }
