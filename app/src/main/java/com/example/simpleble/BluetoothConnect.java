@@ -6,6 +6,7 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothGatt;
 import android.bluetooth.BluetoothGattCallback;
 import android.bluetooth.BluetoothGattCharacteristic;
+import android.bluetooth.BluetoothGattDescriptor;
 import android.bluetooth.BluetoothGattService;
 import android.bluetooth.BluetoothProfile;
 import android.bluetooth.le.BluetoothLeScanner;
@@ -22,6 +23,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 public class BluetoothConnect {
     private final Context context;
@@ -144,11 +146,16 @@ public class BluetoothConnect {
             super.onServicesDiscovered(gatt, status);
             if (status == BluetoothGatt.GATT_SUCCESS) {
                 // BluetoothGatt 의 서비스를 검색 후 호출되는 콜백 메소드
-                BluetoothGattService service = gatt.getService(java.util.UUID.fromString(UUID_SERVICE));
+                BluetoothGattService service = gatt.getService(UUID.fromString(UUID_SERVICE));
                 String UUID_CHARACTERISTIC = "0000ffe1-0000-1000-8000-00805f9b34fb";
-                gattCharacteristic = service.getCharacteristic(java.util.UUID.fromString(UUID_CHARACTERISTIC));
+                gattCharacteristic = service.getCharacteristic(UUID.fromString(UUID_CHARACTERISTIC));
                 // 해당 특성의 알람을 설정
                 gatt.setCharacteristicNotification(gattCharacteristic, true);
+
+                //특성 내부의 descriptor 에서 알람 설정 확인
+                BluetoothGattDescriptor descriptor = gattCharacteristic.getDescriptor(UUID.fromString("00002902-0000-1000-8000-00805f9b34fb"));
+                descriptor.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
+                gatt.writeDescriptor(descriptor);
             }
         }
 
@@ -161,14 +168,6 @@ public class BluetoothConnect {
             Log.d("data", data);
         }
 
-        @Override
-        public void onCharacteristicRead(BluetoothGatt gatt, BluetoothGattCharacteristic characteristic, int status) {
-            super.onCharacteristicRead(gatt, characteristic, status);
-            // 캐릭터리스틱이 변경될 때 호출되는 콜백 메소드
-            byte[] bytes = characteristic.getValue();
-            String data = new String(bytes, StandardCharsets.UTF_8);
-            Log.d("data", data);
-        }
     };
 
     public void sendBLE(String data) throws SecurityException {
